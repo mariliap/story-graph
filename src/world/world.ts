@@ -2,10 +2,11 @@ import Rule, { CauseTypeElement } from '../components/rule'
 import Location from '../components/location'
 import Actor from '../components/actor'
 
-import { randomMatch, checkMatch, twoActors } from './components/story'
+import { randomMatch, checkMatch, randomActorsForRule, printListActorNames } from './components/story'
 import { processEvent } from './components/events'
 import getLocalRules from './components/lib/getLocalRules';
-import checkTransitionMatch from './components/lib/checkTransitionMatch';
+import { checkTransitionMatch } from './components/lib/checkTransitionMatch';
+import RuleActorsCombo from '../components/ruleActorsCombo';
 
 const unique = (arr: any[]) => {
   let box = {}
@@ -14,7 +15,8 @@ const unique = (arr: any[]) => {
 }
 
 const selectAtRandom = (arr: any[]) => {
-  return arr[Math.floor(Math.random() * arr.length)]
+  let index = Math.floor(Math.random() * arr.length);
+  return arr[index]
 }
 
 export default class World {
@@ -128,55 +130,114 @@ export default class World {
     }
   }
 
+  processTimeTrigger(world: World,callback: any){
+
+  }
+
   renderEvent(events) {
     let output = '';
     events.forEach(storyEvent => {
-      const results = this.findRule(storyEvent);
+      console.log('Render Event'); 
+      const results = this.findRuleActorsCombo(storyEvent);
       if (results) {
-        const [ rule, actorOne, actorTwo ] = results
-        output += processEvent(this, rule, actorOne, actorTwo);
+        output += processEvent(this, results);
       }
     });
     this.output = `${this.output}${output}`;
   }
 
   randomEvent() {
-    let count = 0;
-    let rules: false | Rule[] = false;
-    let actorOne, actorTwo;
-    let locationRestriction = this.focalizer
-      ? this.focalizer.location
-      : undefined;
-    while (count < 100 && !rules) {
-      [ actorOne, actorTwo ] = twoActors(this, undefined, locationRestriction)
-      rules = randomMatch(this, actorOne, actorTwo)
-      count ++
+    let rule: Rule ;
+    let excludedRulesIds: number[] = [];
+    let excludedActors: Actor[] = [];
+    let chosingMainActorAttemps = 0;
+    let chosingRuleAttemps = 0;
+    let ruleAssigned = false;
+    let combo : false | RuleActorsCombo =  false;
+
+    if (this.collisions > 10000) {
+      throw new Error('No matches found! ' + this.collisions + ' collisions!')
     }
-    if (!rules || this.collisions > 10) {
-      throw new Error('No matches found! Suggest run testMatches() to evaluate possible matches')
-    }  
-    
-    const rule: Rule = selectAtRandom(rules);
-    
-    if (this.logEvents && rule.name) {
-      console.log(`Match on rule "${rule.name}"`)
+
+    while (chosingMainActorAttemps < 100 && !ruleAssigned && this.actors.length != excludedActors.length){
+      chosingRuleAttemps = 0;
+      excludedRulesIds=[];
+
+      let mainActors = [this.randomActor(undefined, excludedActors)];
+      console.log("Main actor: " + mainActors[0].name)
+      let  rules = randomMatch(this, mainActors, excludedRulesIds);
+      
+      while(chosingRuleAttemps  < 100 && !ruleAssigned && this.rules.length != excludedRulesIds.length) {
+
+        rules = rules.filter(rule => excludedRulesIds.filter(exRuleId => exRuleId === rule.id).length == 0);
+        if (rules.length >0) {
+
+          rule = selectAtRandom(rules);
+
+          console.log("### Rule: " + rule.name + " Source:" + rule.getSource() + " Target: " + (rule.getTarget()? rule.getTarget(): "NA"));
+          
+          if(!rule.getTarget() || rule.getTarget() instanceof Location){
+            ruleAssigned = true;
+            combo = new RuleActorsCombo(rule, mainActors);
+            this.pushRuleMatchInHistory(combo);
+          } else {
+            console.log("Searching matching partner entities for rule "+  rule.name);
+            let randomActors = randomActorsForRule(this, rule, mainActors);
+            let actorsMatch = [...mainActors];
+            if(randomActors){
+              actorsMatch.push(...randomActors);
+            }
+            combo = new RuleActorsCombo(rule, actorsMatch);
+            if(combo.actors.length == mainActors.length){
+              console.log("### Rule not matched. No actor.");
+              excludedRulesIds.push(rule.id);
+              combo = false;
+            } else if(this.findRuleMatchInHistory(combo)){
+              console.log("### Rule not matched. History.");
+              this.collisions += 1
+              excludedRulesIds.push(rule.id);
+              combo = false;
+            } else {
+              ruleAssigned = true;
+              this.pushRuleMatchInHistory(combo);
+            }
+          }
+        } else {
+          break;
+        }
+        chosingRuleAttemps++;
+      }
+
+      if(!ruleAssigned){
+        mainActors.forEach(actor => {
+          excludedActors.push(actor);
+        });
+      }
+
+      chosingMainActorAttemps++;
     }
+
     
-    let output = processEvent(this, rule, actorOne, actorTwo);
-    if (this.ruleHistory.indexOf(output) !== -1) {
-      this.collisions += 1
-      this.randomEvent()
-    } else {
-      this.ruleHistory.push(output)
+    if (!combo) {
+      //throw new Error('No matches found! Suggest run testMatches() to evaluate possible matches')
+      console.log('No matches found! Suggest run testMatches() to evaluate possible matches')
+    } else {  
+      console.log(`Match on rule "${combo.rule.name}". Entities involved: " ${printListActorNames(combo.actors)}"`)
+
+      let output = processEvent(this, combo);
       this.output = `${this.output}${output}`;
     }
+
+
   }
+
   /*
   * This is the main method used for producing output
   */
   runStory(steps, theEvents = []) {
     this.registerTimedEvents(theEvents);
-    while (this.timeIndex < steps) {
+    while (this.timeIndex <= steps) {
+      console.log('############################## Time '+this.timeIndex+' ########################'); 
       this.advanceTime();
     }
   }
@@ -191,10 +252,9 @@ export default class World {
       const age = this.timeIndex - actor.entryTime;
       if (age > actor.lifeTime) {
         this.removeActor(actor.id);
+      } else if (actor.callback) {
+        this.processTimeTrigger(this, actor.callback(this.timeIndex));
       }
-      // } else if (actor.callback !== null) {
-        // this.processTimeTrigger(this, actor.callback(this.timeIndex));
-      // }
     });
     this.timeIndex++;
   }
@@ -205,7 +265,7 @@ export default class World {
     });
   }
 
-  findRule(piece: CauseTypeElement): [ Rule, Actor, Actor ] | false {
+  findRuleActorsCombo(piece: CauseTypeElement): RuleActorsCombo | false {
     const source = this.getActorById(piece[0]);
     const action = piece[1];
     const target = this.getActorById(piece[2]);
@@ -213,11 +273,39 @@ export default class World {
       for (let i = 0; i < this.numRules; i++) {
         const rule = this.rules[i];
         if (checkMatch(rule, source, target, action)) {
-          return [ rule, source, target ];
+         
+          let combo =  new RuleActorsCombo(rule, [source, target]);
+          return combo;
         }
       }
     }
     return false;
+  }
+
+  findRuleMatchInHistory(combo: RuleActorsCombo): boolean {
+    let matchesInHistory = this.ruleHistory.filter(element => {
+      let sameActorsInOrder = false;
+      if(element.actors.length == combo.actors.length){
+        sameActorsInOrder = true;
+        for(let i = 0; i < element.actors.length; i++){
+          if(element.actors[i] !== combo.actors[i]){
+            sameActorsInOrder = false;
+            break;
+          }
+        }
+      } 
+      if(sameActorsInOrder && element.rule.name === combo.rule.name){
+        return true;
+      } else {
+        return false;
+      }
+    });
+
+    return matchesInHistory.length !== 0;
+  }
+
+  pushRuleMatchInHistory(combo: RuleActorsCombo){
+    this.ruleHistory.push(combo);
   }
 
   testMatches() {
@@ -225,7 +313,7 @@ export default class World {
     this.actors.forEach(actor => {
       results[actor.name] = {}
       if (actor.locations.length) {
-        console.log(actor.locations)
+        //console.log(actor.locations)
         actor.locations.forEach(location => {
           actor.location = location
           this.populateMatchesForActor(actor, results);
@@ -236,12 +324,23 @@ export default class World {
     return results
   }
 
-  randomActor(location?: string): Actor {
+  randomActor(locations?: Location[], excludedActors?:Actor[]): Actor {
     let actors = this.actors;
-    if(location) {
-      actors = actors.filter(actor => actor.location === location || actor.locations.indexOf(location) !== -1);
+   
+    if(excludedActors) {
+      actors = actors.filter(actor => 
+                                excludedActors.filter(exActor => exActor.id === actor.id).length == 0);
     }
+    if(locations) {
+      let location = locations[0];
+      actors = actors.filter(actor => 
+                                actor.location === location || 
+                                actor.locations.filter(loc => loc.name === location.name).length !== 0);
+    }
+
     const index = Math.floor(Math.random() * actors.length)
+    console.log("Random actor. Length List to Choose From:"+actors.length + " Choosing: '" +actors[index].name+"'");
+    
     return actors[index];
   }
 

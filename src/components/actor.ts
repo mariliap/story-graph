@@ -1,21 +1,25 @@
-import { SOURCE, TARGET } from './constants'
+import { SOURCE_CAUSE, TARGET_CAUSE } from './constants'
 import Type from './type'
+import Location from './location'
+
 
 export default class Actor {
   id: number
   type: Type
   name: string
-  location?: string
-  locations: string[]
+  location?: Location
+  locations: Location[]
   entryTime: number
   lifeTime: number
-  // callback: () => void
+  callback: (number) => void
   members: Actor[]
+  blackList: Actor[] //actors likely to be harmed by this actor
+  whileList: Actor[] //actors likely to be helped by this actor
   parentId?: number;
 
-  constructor(data, world, actorOne?: Actor, actorTwo?: Actor) {
-    this.type = data.type;
+  constructor(data, world,  actors?: Actor[] |Actor) {
     this.name = data.name;
+    this.type = data.type;
     this.members = [];
     if (data.locations) {
       this.location = data.location || data.locations[0];
@@ -26,18 +30,19 @@ export default class Actor {
 
     this.lifeTime = data.lifeTime || 999;
     if (data.members) {
-      this.fetchMembers(world, data.members, actorOne, actorTwo);
+      this.fetchMembers(world, data.members, actors);
     }
+    
     if (data.initializeName) {
       this.name = data.initializeName(this, world);
     }
   }
-  fetchMembers(world, members, actorOne, actorTwo) {
+  fetchMembers(world, members,  actors) {
     members.forEach((member, idx) => {
-      if (member === SOURCE) {
-        this.members[idx] = actorOne
-      } else if (member === TARGET) {
-        this.members[idx] = actorTwo
+      if (member === SOURCE_CAUSE) {
+        this.members[idx] = actors[0]
+      } else if (member === TARGET_CAUSE) {
+        this.members[idx] = actors[1]
       }
     });
   }

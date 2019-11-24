@@ -9,6 +9,7 @@ function includes(arr: any[], item: any) {
 const getLocalRules = (world: World, actor: Actor): Rule[] => {
   return world.rules.filter((rule: Rule) => {
     const isLocalized: boolean = !!rule.locations.length;
+    //console.log(rule.name + ' '+ isLocalized);
     // rule is universal or actorOne is omnipresent
     if (!isLocalized || !actor.location) return true;
     

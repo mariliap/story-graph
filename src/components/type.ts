@@ -26,4 +26,7 @@ export default class Type {
   remove(type) {
     this.types.splice(this.types.indexOf(type), 1);
   }
+  toString(){
+    return "Type:"+this.types.slice().toString();
+  }
 }

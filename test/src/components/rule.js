@@ -1,4 +1,4 @@
-const assert = require('assert');
+/*const assert = require('assert');
 const Rule = require('../../../src/components/rule');
 const SG = require('../../../src/main');
 const Actor = SG.Actor;
@@ -88,3 +88,4 @@ describe('Rule', () => {
     });
   });
 });
+*/

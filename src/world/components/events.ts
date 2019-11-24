@@ -1,10 +1,12 @@
 import Actor from '../../components/actor'
-import { matchRulesFor } from './story'
-import { addPeriod, capitalizeFirst } from './lib/grammar'
-import { SOURCE, TARGET, VANISH, MOVE_IN, Event, MOVE_OUT } from '../../components/constants'
+import Location from '../../components/location'
+import { matchRulesFor, printListActorNames } from './story'
+import { addPeriod, adaptArticles, capitalizeFirst } from './lib/grammar'
+import { SOURCE_CAUSE, TARGET_CAUSE, VANISH, MOVE_IN, Event, MOVE_OUT, SOURCE_CONSEQUENT, TARGET_CONSEQUENT } from '../../components/constants'
 import World from '../world'
 import Rule from '../../components/rule'
 import * as utility from './utility'
+import RuleActorsCombo from '../../components/ruleActorsCombo';
 
 const selectAtRandom = (arr: any[]) => {
   return arr[ Math.floor(Math.random() * arr.length) ]
@@ -14,21 +16,33 @@ const selectAtRandom = (arr: any[]) => {
  * Replaces the constants SOURCE and TARGET with the IDs of the actors that
  * triggered this rule
  */
-export function populateTemplate(eventTemplate, actorOne: Actor, actorTwo?: Actor) {
+export function populateTemplate(eventTemplate, actors: Actor[]) {
   if (!eventTemplate || !eventTemplate.length) return false;
-
+  
+  console.log("eventTemplate " + eventTemplate)
   return eventTemplate.map(value => {
-    if (value === SOURCE) {
-      return actorOne.id;
-    } else if (value === TARGET && actorTwo) {
-      return actorTwo.id;
+    if (value === SOURCE_CAUSE) {
+      console.log("SOURCE_CAUSE " + actors[0].name)
+      return actors[0];
+    } else if (value === TARGET_CAUSE && actors[1]) {
+      console.log("TARGET_CAUSE " + actors[1].name)
+      return actors[1];
+    } else if (value === SOURCE_CONSEQUENT && actors[2] ) {
+      console.log("SOURCE_CONSEQUENT " + actors[2].name)
+      return actors[2];
+    } else if (value === TARGET_CONSEQUENT && actors[3] ) {
+      console.log("TARGET_CONSEQUENT " + actors[3].name)
+      return actors[3];
     } else {
       return value;
     }
   });
 }
 
-type StoryEvent = [ number, Event, number] | [ number, Event ] | [ number, Event, string ]
+type StoryEvent = [ Actor, Event, Actor] | 
+                  [ Actor, Event ] | 
+                  [ Actor, Event, Location ] | 
+                  [ Actor, Event, string ];
 
 export function renderTemplate(world: World, template: any[]) {
   const result = template.map(piece => utility.fetchElement(world, piece));
@@ -37,49 +51,59 @@ export function renderTemplate(world: World, template: any[]) {
     return '';
   }
 
-  return addPeriod(capitalizeFirst(body))
+  return addPeriod(adaptArticles(capitalizeFirst(body)))
 }
 
-export function addConsequentActor(world: World, rule: Rule, actorOne, actorTwo) {
-  const consequentActor = new Actor(rule.consequentActor, world, actorOne, actorTwo);
+export function addConsequentActor(world: World, rule: Rule, actors: Actor[] | Actor) {
+  const consequentActor = new Actor(rule.consequentActor, world, actors);
   consequentActor.parentId = rule.id;
   world.addActor(consequentActor);
 }
 
-export function applyConsequent(world: World, typeExpression) {
+export function applyConsequentEvent(world: World, typeExpression) {
   if (!typeExpression.length || typeExpression[0] === undefined) return false;
   const typeExpressionArray = Array.isArray(typeExpression[0]) ? typeExpression : [typeExpression];
   let result = '';
   typeExpressionArray.forEach((expr: StoryEvent) => {
+    //console.log('------------');
+    //console.log(expr[0]);
+    //console.log(expr[1]);
+    //console.log(expr[2]);
+
     switch (expr[1]) {
-      case VANISH: { // [ id, VANISH ]
+      case VANISH: { 
         const actor = expr[0];
-        utility.removeActor(world, actor);
+        utility.removeActor(world, actor.id);
         break;
       }
       case MOVE_OUT:
-      case MOVE_IN: { // [ id, MOVE_IN, 'location' ]
-        const actor = world.getActorById(expr[0]);
-        const newLocation = expr[2] as string;
-        if (actor) {
+      case MOVE_IN: { 
+        const actor = expr[0];
+        const newLocation = expr[2]; //world.getLocationById(expr[2]); // as string;
+       
+        if (actor && actor instanceof Actor && newLocation && newLocation instanceof Location) {
           actor.location = newLocation;
         }
         break;
       }
       default: { // [ id, SOME_EVENT, id ]
-        const source = world.getActorById(expr[0]);
-        const target = world.getActorById(expr[2]);
-        if (!source) {
+        
+        const source = expr[0];
+        const target = expr[2];
+        if (!source || !(source instanceof Actor)) {
+          console.log(expr[0]);
           throw Error(`Actor id ${expr[0]} invalid`);
         }
-        if (!target) {
+        if (!target || !(target instanceof Actor)) {
+          console.log(expr[2]);
           throw Error(`Actor id ${expr[2]} invalid`);
         }
         const rules = matchRulesFor(world, source, target, expr[1])
         if (rules && rules.length) {
           /* eslint-disable no-use-before-define */
           const rule = selectAtRandom(rules);
-          result = processEvent(world, rule, source, target);
+          let combo =  new RuleActorsCombo(rule, [source, target]);
+          result = processEvent(world, combo);
         }
       }
     }
@@ -87,24 +111,33 @@ export function applyConsequent(world: World, typeExpression) {
   return result;
 }
 
-export function processEvent(world: World, rule: Rule, actorOne: Actor, actorTwo?: Actor) {
-  const causeTemplate = populateTemplate(rule.cause.template, actorOne, actorTwo);
-  let consequentTemplate = []
-  let tertiaryTemplate = false
-  if (rule.consequent) {
-    consequentTemplate = populateTemplate(rule.consequent.template, actorOne, actorTwo);
-    tertiaryTemplate = populateTemplate(rule.consequent.type, actorOne, actorTwo);
+export function processEvent(world: World, ruleMatchCombo: RuleActorsCombo) {
+  const populatedCauseOutputTemplate = populateTemplate(ruleMatchCombo.rule.cause.template, 
+                                                        ruleMatchCombo.actors);
+  let populatedConsequentOutputTemplate = []
+  let populatedConsequentEventTemplate = false
+  if (ruleMatchCombo.rule.consequent) {
+    populatedConsequentOutputTemplate = populateTemplate(ruleMatchCombo.rule.consequent.template, 
+                                                        ruleMatchCombo.actors);
+    populatedConsequentEventTemplate = populateTemplate(ruleMatchCombo.rule.consequent.type, 
+                                                        ruleMatchCombo.actors);
   }
-  const causeText = causeTemplate ? renderTemplate(world, causeTemplate) : ''
-  const consequentText = consequentTemplate ? renderTemplate(world, consequentTemplate) : ''
-  const tertiary = tertiaryTemplate ? applyConsequent(world, tertiaryTemplate) : '';
+  const causeText = populatedCauseOutputTemplate ? renderTemplate(world, populatedCauseOutputTemplate) : ''
+  const consequentText = populatedConsequentOutputTemplate ? renderTemplate(world, populatedConsequentOutputTemplate) : ''
+  
+  if (ruleMatchCombo.rule.consequentActor) {
+    addConsequentActor(world, ruleMatchCombo.rule, ruleMatchCombo.actors);
+    console.log("Actors in the world: "+ printListActorNames(world.actors));
+  }
+  //if (ruleMatchCombo.rule.mutations) {
+  //  ruleMatchCombo.rule.mutations(actorOne, actorTwo)
+ // }
+  
+  populatedConsequentEventTemplate = false;
+  const tertiary = populatedConsequentEventTemplate ? applyConsequentEvent(world, populatedConsequentEventTemplate) : '';
 
-  if (rule.consequentActor) {
-    addConsequentActor(world, rule, actorOne, actorTwo);
-  }
-  if (rule.mutations) {
-    rule.mutations(actorOne, actorTwo)
-  }
-  const result = causeText + consequentText + tertiary;
+  const result = causeText + consequentText + tertiary + "\n";
   return result;
+
+
 }

@@ -1,5 +1,6 @@
 import Rule from '../../../components/rule'
-import Actor from '../../../components/actor'
+import Actor from '../../../components/actor' 
+import Location from '../../../components/location'
 import { MOVE_OUT } from '../../../components/constants'
 
 import ruleMatchesActor from './ruleMatchesActor'
@@ -22,18 +23,30 @@ import ruleMatchesActor from './ruleMatchesActor'
  *   Whether or not the transition is valid.
  */
 
-const checkTransitionMatch = (
+export const checkTransitionMatch = (
   rule: Rule, 
-  actor: Actor, 
+  actor: Actor 
 ): boolean => {
   if (rule.getActionType() === MOVE_OUT && rule.getTarget() === actor.location) {
-    return ruleMatchesActor(rule, actor, 'source')
+    console.log("Checking if actor '"+ actor.name  +"' of types "+ actor.getTypes()+ " matches source of rule " + rule.name + ", which is " + rule.getSource().toString());
+    return ruleMatchesActor(rule.getSource(), actor)
   } else {
     return false;
   }
 };
 
-export default checkTransitionMatch
+export const checkInteractionMatch = (
+  rule: Rule, 
+  actor: Actor
+): boolean => {
+  if (rule.getActionType() !== MOVE_OUT && !(rule.getTarget() instanceof Location)) {
+    console.log("Checking if actor '"+ actor.name  +"' of types "+ actor.getTypes()+ " matches source of rule " + rule.name + ", which is " + rule.getSource().toString());
+    return ruleMatchesActor(rule.getSource(), actor)
+  } else {
+    return false;
+  }
+};
+
 
 
 // rule.getActionType === MOVE_OUT && rule.getTarget === actor.location

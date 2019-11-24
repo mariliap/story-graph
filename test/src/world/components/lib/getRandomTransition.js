@@ -1,4 +1,4 @@
-const assert = require('assert');
+/*const assert = require('assert');
 const getRandomTransition = require('../../../../../src/world/components/lib/getRandomTransition');
 const Rule = require('../../../../../src/components/rule');
 const SG = require('../../../../../src/main');
@@ -91,3 +91,4 @@ describe('getRandomTransition', () => {
     assert.deepEqual(getRandomTransition(world), false);
   });
 });
+*/

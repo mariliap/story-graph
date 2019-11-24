@@ -6,4 +6,8 @@ export default class Location {
     this.name = data.name;
     this.id = data.id;
   }
+
+  toString(){
+    return "Location:"+this.name;
+  }
 }

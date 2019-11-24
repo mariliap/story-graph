@@ -1,13 +1,13 @@
-import { Event, ActorReference } from './constants';
+import { Event, RuleElementReference } from './constants';
 import Type from './type';
 import Location from './location';
 import Actor from './actor';
 
-export type TemplateElement = ActorReference | string;
-export type RuleTypeElement = Type | number | string;
+export type TemplateElement = RuleElementReference | string;
+export type RuleTypeElement = Type | number | Location | string;
 
 export type CauseTypeElement = [ RuleTypeElement, Event, RuleTypeElement ];
-export type ConsequentTypeElement = [ ActorReference, Event, string ];
+export type ConsequentTypeElement = [ RuleElementReference | RuleTypeElement, Event, RuleElementReference | RuleTypeElement ];
 
 
 interface CausePattern {
@@ -22,7 +22,7 @@ interface ConsequentPattern {
 
 export default class Rule {
   cause: CausePattern;
-  consequent: null | ConsequentPattern;
+  consequent: ConsequentPattern;
   consequentActor: undefined | Actor;
   id: number;
   isDirectional: boolean;
@@ -46,11 +46,17 @@ export default class Rule {
   getSource(): RuleTypeElement {
     return this.cause.type[0];
   }
+
   getTarget(): RuleTypeElement {
     return this.cause.type[2];
   }
-  getConsequentTarget() {
-    return this.consequent && this.consequent.type[2];
+  
+  getConsequentSource(): RuleElementReference | RuleTypeElement  {
+    return this.consequent && this.consequent.type && this.consequent.type[0];
+  }
+
+  getConsequentTarget(): RuleElementReference | RuleTypeElement  {
+    return this.consequent && this.consequent.type && this.consequent.type[2];
   }
   getActionType() {
     return this.cause.type[1];

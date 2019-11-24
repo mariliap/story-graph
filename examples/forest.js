@@ -209,5 +209,7 @@ world.addRule({
 });
 
 /* eslint-disable no-console */
-world.runStory(6);
+world.runStory(20);
 console.log(world.output);
+const test = world.testMatches()
+console.log(test)

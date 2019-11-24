@@ -1,4 +1,5 @@
 import World from 'src/world/world'
+import { Actor, Location } from '../../main';
 
 export function removeActor(world: World, id: number) {
   let index: number | null = null;
@@ -15,14 +16,25 @@ export function removeActor(world: World, id: number) {
 }
 
 export function fetchElement(world: World, element: any): string {
-  if (typeof element === 'number') {
-    const actor = world.getActorById(element)
+  if (element instanceof Actor) {
+    //console.log("actor:");
+    //console.log(world.getActorById(element.id));
+    const actor = world.getActorById(element.id)
     if (actor) {
       return actor.name
+    }
+  } else if (element instanceof Location) {
+    const location = world.getLocationById(element.id)
+    if (location) {
+      return location.name
     }
   } else if (typeof element === 'string') {
     return element
   }
+
+  //console.log(element);
   return ''
 }
+
+
 
